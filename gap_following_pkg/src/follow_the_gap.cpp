@@ -25,46 +25,73 @@ public:
         pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
         sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             "/scan", 10, std::bind(&FollowTheGapNode::lidar_callback, this, std::placeholders::_1));
-        RCLCPP_INFO(this->get_logger(), "existo :D en forma de follow the Gap");
     }
 
 private:
+    enum RobotState {
+        CORRECTING_ANGLE_GAP,
+        ADVANCING_GAP
+    };
+    RobotState state_ = CORRECTING_ANGLE_GAP;
+    static constexpr double ANGLE_THRESHOLD = 0.045;
+
     void lidar_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
     {
         double dt = this->get_clock()->now().seconds() - last_time_.seconds();
-
-        // int gap_start, gap_end;
+        
+        // Busca el hueco más grande en el escaneo del LIDAR
+        float mid_gap = find_biggest_gap(msg->ranges, OUT_RANGE, 0.8);
+        
+        // Determina el índice que representa la dirección frontal del robot con respecto al LIDAR
         int index_front = round((-msg->angle_min) / msg->angle_increment);
         double front_distance = msg->ranges[index_front];
-        // std::tie(gap_start, gap_end) = find_biggest_gap(msg->ranges, 180, 0.8);
-        float mid_gap = find_biggest_gap(msg->ranges, OUT_RANGE, 0.8);
-        mid_gap = mid_gap;
-        RCLCPP_INFO(this->get_logger(), "mid_gap: %.2f", mid_gap);
-
-        // int ref = round(msg->ranges.size() / 2);
-
+        
+        // Calcula el error como la diferencia entre el índice medio del hueco detectado y el frente del robot
         int ref = 0;
-
         double error = (ref - mid_gap);
 
+        geometry_msgs::msg::Twist cmd;
+
+        // Calcula el ángulo necesario para corregir la orientación del robot
         double de = error - last_error_;
         last_error_ = error;
         integral_ = (error - last_error_) * dt;
         double theta_d = Kp * error + Kd * de / dt + integral_ * Ki;
 
-        geometry_msgs::msg::Twist cmd;
-        theta_ant_ = theta_ant_ - theta_d;
+        theta_ant_ = theta_d;
         if (abs(theta_ant_) > MAX_TETHA)
         {
             theta_ant_ = theta_ant_ / abs(theta_ant_) * MAX_TETHA;
         }
+
+        // Activar el nodo basado en la distancia frontal
         if (front_distance <= Switch || p_radar < Switch * 0.3)
         {
+            RCLCPP_INFO(this->get_logger(), "Se activó mi fafá");
+            if(state_ == CORRECTING_ANGLE_GAP)
+            {
+                // Si el robot necesita corregir su ángulo, lo hace
+                cmd.angular.z = theta_ant_;
+                pub_->publish(cmd);
 
-            RCLCPP_INFO(this->get_logger(), "Se activo mi fafa con: %.2f", p_radar);
-            cmd.angular.z = theta_ant_;
-            cmd.linear.x = VEL_X;
-            pub_->publish(cmd);
+                // Si el error es lo suficientemente pequeño, cambia al estado de avanzar
+                if(abs(error) < ANGLE_THRESHOLD)
+                {
+                    state_ = ADVANCING_GAP;
+                }
+            }
+            else if(state_ == ADVANCING_GAP)
+            {
+                // Si el robot está en la orientación correcta, avanza
+                cmd.linear.x = VEL_X;
+                pub_->publish(cmd);
+
+                // Si el error se vuelve demasiado grande, cambia al estado de corrección de ángulo
+                if(abs(error) > ANGLE_THRESHOLD + 0.1)
+                {
+                    state_ = CORRECTING_ANGLE_GAP;
+                }
+            }
         }
     }
 

@@ -27,9 +27,9 @@ private:
 
         // Calculate index for the desired angles
         int index_front = round((-msg->angle_min) / msg->angle_increment);
-        int index_left = round((M_PI / 2  - msg->angle_min) / msg->angle_increment); // Swapped left and right
+        int index_left = round((M_PI / 2  - msg->angle_min) / msg->angle_increment); 
         int index_back = round((M_PI - msg->angle_min) / msg->angle_increment);
-        int index_right = round((-M_PI / 2 - msg->angle_min) / msg->angle_increment); // Now the right takes the front calculation
+        int index_right = round((-M_PI / 2 - msg->angle_min) / msg->angle_increment); 
         int index_a = index_right; // Updated this as well since it should be left not right
         int index_b = round((-M_PI / 2  - msg->angle_min + theta)/msg->angle_increment);
 

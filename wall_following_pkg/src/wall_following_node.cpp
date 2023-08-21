@@ -9,8 +9,8 @@ public:
     WallFollowing() : Node("wall_following_node")
     {
 
-        this->declare_parameter("DIS_WALL", 2.0);
-        this->declare_parameter("SAFETY_DISTANCE", 2.0);
+        this->declare_parameter("DIS_WALL", 0.3);
+        this->declare_parameter("SAFETY_DISTANCE", 0.3);
         DIS_WALL = this->get_parameter("DIS_WALL").as_double();
         SAFETY_DISTANCE = this->get_parameter("SAFETY_DISTANCE").as_double();
 
@@ -23,31 +23,34 @@ public:
 private:
     void scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
     {   
-        double theta = M_PI / 18 * 3;  // 30 degrees in radians
-        // double right_beam_angle = 3/4 * M_PI ;
-        // double delta_beam_angle = right_beam_angle - theta ; 
-        
-        // int right_beam_index = round((right_beam_angle - msg->angle_min) / msg->angle_increment);
-        // int delta_beam_index =  round((delta_beam_angle - msg->angle_min) / msg->angle_increment);
+        double theta = M_PI / 18*3;  // 10 degrees in radians
 
-        double b = msg->ranges[300];
-        double a = msg->ranges[270];
+        // Calculate index for the desired angles
+        int index_front = round((-msg->angle_min) / msg->angle_increment);
+        int index_left = round((M_PI / 2  - msg->angle_min) / msg->angle_increment); // Swapped left and right
+        int index_back = round((M_PI - msg->angle_min) / msg->angle_increment);
+        int index_right = round((-M_PI / 2 - msg->angle_min) / msg->angle_increment); // Now the right takes the front calculation
+        int index_a = index_right; // Updated this as well since it should be left not right
+        int index_b = round((-M_PI / 2  - msg->angle_min + theta)/msg->angle_increment);
 
+        double a = msg->ranges[index_a];
+        double b = msg->ranges[index_b];
+        //RCLCPP_INFO(this->get_logger(), "a: %.2f, b: %.2f", a,b);
         
         double alpha = atan((a * cos(theta) - b) / (a * sin(theta)));
         double AB = b * cos(alpha);
-        double AC = 0.05;
+        double AC = 0.05;  // Assuming this is a constant offset, adjust if necessary
         double CD = AB + AC * sin(alpha);
-
         
         double error = DIS_WALL - CD;
 
-        double front_distance = msg->ranges[0];
-        double rigth_distance = msg->ranges[270];
-        double back_distance = msg->ranges[180];
-        double  left_distance = msg->ranges[90];
-        RCLCPP_INFO(this->get_logger(), "f: %.2f r: %.2f b: %.2f l: %.2f e: %.2f",front_distance,
-        rigth_distance,back_distance,left_distance,error);
+        double front_distance = msg->ranges[index_front];
+        double right_distance = msg->ranges[index_right];
+        double back_distance = msg->ranges[index_back];
+        double left_distance = msg->ranges[index_left];
+
+        RCLCPP_INFO(this->get_logger(), "f: %.2f r: %.2f b: %.2f l: %.2f e: %.2f", front_distance,
+        right_distance, back_distance, left_distance, error);
         if (front_distance < SAFETY_DISTANCE)
         {
             RCLCPP_INFO(this->get_logger(), "Obstacle detected in front!");
@@ -63,8 +66,8 @@ private:
         dist_wall_msg.data = CD;
         publisher_dist->publish(dist_wall_msg);
     }
-    double DIS_WALL=2.0;
-    double SAFETY_DISTANCE=2.0;
+    double DIS_WALL=0.3;
+    double SAFETY_DISTANCE=0.3;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr subscriber_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr publisher_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr publisher_dist;

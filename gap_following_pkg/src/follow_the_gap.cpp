@@ -34,7 +34,8 @@ private:
         double dt = this->get_clock()->now().seconds() - last_time_.seconds();
 
         // int gap_start, gap_end;
-
+        int index_front = round((-msg->angle_min) / msg->angle_increment);
+        double front_distance = msg->ranges[index_front];
         // std::tie(gap_start, gap_end) = find_biggest_gap(msg->ranges, 180, 0.8);
         float mid_gap = find_biggest_gap(msg->ranges, OUT_RANGE, 0.8);
         mid_gap = mid_gap;
@@ -49,7 +50,7 @@ private:
         double de = error - last_error_;
         last_error_ = error;
         integral_ = (error - last_error_) * dt;
-        double theta_d = Kp * error + Kd * de / dt + integral_*Ki;
+        double theta_d = Kp * error + Kd * de / dt + integral_ * Ki;
 
         geometry_msgs::msg::Twist cmd;
         theta_ant_ = theta_ant_ - theta_d;
@@ -57,9 +58,9 @@ private:
         {
             theta_ant_ = theta_ant_ / abs(theta_ant_) * MAX_TETHA;
         }
-        if (msg->ranges[0] <= Switch || p_radar<Switch*0.3)
-        {        
-            
+        if (front_distance <= Switch || p_radar < Switch * 0.3)
+        {
+
             RCLCPP_INFO(this->get_logger(), "Se activo mi fafa con: %.2f", p_radar);
             cmd.angular.z = theta_ant_;
             cmd.linear.x = VEL_X;
@@ -69,10 +70,10 @@ private:
 
     float find_biggest_gap(const std::vector<float> &data, int skip_count, float v)
     {
-        double sumR=0;
+        double sumR = 0;
         int size = data.size();
         // Validar que el vector data no esté vacío y que skip_count sea menor o igual a la mitad del tamaño de data
-        if (data.empty() || skip_count > size )
+        if (data.empty() || skip_count > size)
         {
             // Retornar un valor por defecto o manejar el error según tus necesidades
             RCLCPP_WARN(this->get_logger(), "No hay datos en el vector");
@@ -84,7 +85,7 @@ private:
         int max_gap_size = 0;
         int current_gap_size = 0;
         int j = 1;
-        
+
         // Divide el vector en tres grupos: primero, segundo (que se omite) y tercero
 
         float second_group_start = size / 2 - skip_count / 2;
@@ -100,7 +101,7 @@ private:
             {
                 value = 30.0;
             }
-            sumR+=value;
+            sumR += value;
 
             if (value > v)
             {
@@ -130,7 +131,7 @@ private:
             {
                 value = 30.0;
             }
-            sumR+=value;
+            sumR += value;
             if (value > v && i != second_group_start - 1)
             {
                 if (current_gap_size == 0)
@@ -151,8 +152,7 @@ private:
             j++;
         }
 
-
-        p_radar=sumR/j;
+        p_radar = sumR / j;
 
         current_gap_size = 0;
         double mid_gap = max_gap_start + max_gap_size / 2;
@@ -170,7 +170,7 @@ private:
     double Kp = 0.8;   // Adjust as needed
     double Kd = 3.212; // Adjust as needed
     double Ki = 0.5;
-    double p_radar=30;
+    double p_radar = 30;
     int OUT_RANGE = 240;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_;

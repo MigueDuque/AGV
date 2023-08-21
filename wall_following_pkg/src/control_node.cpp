@@ -8,11 +8,10 @@ class ControlNode : public rclcpp::Node
 public:
     ControlNode() : Node("control_node"), last_error_(0), theta_ant_(0)
     {
-
         this->declare_parameter("VEL_X", 0.3);
-        this->declare_parameter("MAX_THETA", 0.8);
-        this->declare_parameter("Kp", 0.8);  // Valor por defecto
-        this->declare_parameter("Kd", 3.212);  // Valor por defecto
+        this->declare_parameter("MAX_THETA", 0.1);
+        this->declare_parameter("Kp", 0.8);
+        this->declare_parameter("Kd", 3.212);
         this->declare_parameter("DIS_WALL", 0.3);
 
         VEL_X = this->get_parameter("VEL_X").as_double();
@@ -35,27 +34,53 @@ private:
         dist_wall = msg->data;
     }
 
+    enum RobotState {
+        CORRECTING_ANGLE,
+        ADVANCING
+    };
+
+    RobotState state_ = CORRECTING_ANGLE;
+    static constexpr double ANGLE_THRESHOLD = 0.015;  // Este valor puede ser ajustado según tus necesidades
+
     void error_callback(const std_msgs::msg::Float32::SharedPtr msg)
     {
-
-        
-        double dt = this->get_clock()->now().seconds() - last_time_.seconds();
-
-        double de = msg->data - last_error_;
-        integral_ += (msg->data - last_error_) * dt;
-        double feed_forward = DIS_WALL - dist_wall;
-
-        double theta_d = Kp * msg->data + Kd * de / dt + feed_forward;
-        
-        theta_ant_ = theta_ant_ - theta_d;
-        if(abs(theta_ant_)>MAX_TETHA){
-            theta_ant_=theta_ant_/abs(theta_ant_)*MAX_TETHA;
-        }
         geometry_msgs::msg::Twist cmd;
-        cmd.angular.z = -theta_ant_;
-        cmd.linear.x=VEL_X ;
-        publisher_->publish(cmd);
 
+        if(state_ == CORRECTING_ANGLE){
+            RCLCPP_INFO(this->get_logger(), "CORRECTING_ANGLE");
+            double dt = this->get_clock()->now().seconds() - last_time_.seconds();
+
+            double de = msg->data - last_error_;
+            double feed_forward = DIS_WALL - dist_wall;
+            double theta_d = Kp * msg->data + Kd * de / dt + feed_forward;
+            
+            theta_ant_ = theta_d;
+            
+            if(theta_ant_ > 0.0){
+                theta_ant_ = theta_ant_*10;
+            }
+
+            if(abs(theta_ant_)>MAX_TETHA){
+                theta_ant_=theta_ant_/abs(theta_ant_)*MAX_TETHA;
+            }
+
+            RCLCPP_INFO(this->get_logger(), "theta_ant if: %.2f", theta_ant_);
+
+            if(std::abs(msg->data) < ANGLE_THRESHOLD) {
+                state_ = ADVANCING;
+            } else {
+                cmd.angular.z = theta_ant_;
+            }
+        } else if(state_ == ADVANCING){
+            RCLCPP_INFO(this->get_logger(), "ADVANCING");
+            if(std::abs(msg->data) > ANGLE_THRESHOLD+0.01) {
+                state_ = CORRECTING_ANGLE;
+                return; // Regresa inmediatamente para que la corrección sea procesada en la próxima llamada
+            }
+            cmd.linear.x = VEL_X;
+        }
+
+        publisher_->publish(cmd);
         last_error_ = msg->data;
         last_time_ = this->get_clock()->now();
     }
@@ -65,9 +90,8 @@ private:
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr subscriber_dist;
     double last_error_;
     double theta_ant_;
-    double integral_;
     double VEL_X=0.3;
-    double MAX_TETHA=0.8;
+    double MAX_TETHA=0.1;
     double Kp = 0.8; 
     double Kd = 3.212; 
     double dist_wall;

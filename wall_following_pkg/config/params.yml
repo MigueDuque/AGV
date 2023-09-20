@@ -1,0 +1,12 @@
+control_node:
+  ros__parameters:
+    VEL_X: 0.5
+    MAX_THETA: 0.6
+    Kp: 1.657
+    Kd: 7.585
+    DIS_WALL: 0.3
+
+wall_following_node:
+  ros__parameters:
+    DIS_WALL: 0.26
+    SAFETY_DISTANCE: 0.1

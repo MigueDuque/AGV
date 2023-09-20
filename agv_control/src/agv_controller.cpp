@@ -31,7 +31,7 @@ public:
     }
 
     twist_subs_ = this->create_subscription<geometry_msgs::msg::Twist>(
-      "/cmd_vel", rclcpp::QoS(10),
+      "/cmd_vel_out", rclcpp::QoS(10),
       std::bind(&AGVController::sendCmdVel, this, std::placeholders::_1));
 
     motor_velocities_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("motor_velocities", 10);

@@ -120,7 +120,7 @@ private:
   void sendUART(const std::string& message)
   {
     serial.writeString(const_cast<char*>(message.c_str()));
-    RCLCPP_INFO(this->get_logger(), message);
+    RCLCPP_INFO(this->get_logger(), "%s", message.c_str());
   }
 
   void confirmCommunication()
@@ -130,7 +130,7 @@ private:
 
     // Enviar un mensaje y esperar la confirmación "OK"
     sendUART(confirmMsg);
-    RCLCPP_INFO(this->get_logger(), confirmMsg);
+    RCLCPP_INFO(this->get_logger(), "%s", confirmMsg.c_str());
     success = waitForResponse("OK", 10000);
 
     if (success) {
